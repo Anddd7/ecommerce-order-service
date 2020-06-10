@@ -1,19 +1,22 @@
 package com.ecommerce.order.order.model;
 
-import com.ecommerce.order.common.ddd.AggregateRoot;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.List;
-
 import static com.ecommerce.order.order.model.OrderStatus.CREATED;
 import static com.google.common.collect.Lists.newArrayList;
 import static java.math.BigDecimal.ZERO;
 import static java.time.Instant.now;
 
+import com.ecommerce.order.common.ddd.AggregateRoot;
+import com.ecommerce.order.order.exception.OrderCannotBeModifiedException;
+import com.ecommerce.order.order.exception.ProductNotInOrderException;
+import com.ecommerce.order.product.ProductId;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+
 public class Order implements AggregateRoot {
+
     private OrderId id;
-    private List<OrderItem> items = newArrayList();
+    private final List<OrderItem> items = newArrayList();
     private BigDecimal totalPrice;
     private OrderStatus status;
     private Instant createdAt;
@@ -58,5 +61,24 @@ public class Order implements AggregateRoot {
 
     public List<OrderItem> getItems() {
         return items;
+    }
+
+    public void updateProductCount(ProductId productId, int count) {
+        if (status.equals(OrderStatus.PAID)) {
+            throw new OrderCannotBeModifiedException(id);
+        }
+        items.stream()
+            .filter(item -> item.getProductId().equals(productId))
+            .findFirst()
+            .orElseThrow(() -> new ProductNotInOrderException(productId, id))
+            .updateCount(count);
+        totalPrice = items.stream()
+            .map(OrderItem::totalPrice)
+            .reduce(BigDecimal::add)
+            .orElse(ZERO);
+    }
+
+    public void pay() {
+        status = OrderStatus.PAID;
     }
 }
